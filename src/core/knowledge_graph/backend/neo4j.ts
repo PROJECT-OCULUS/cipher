@@ -40,6 +40,10 @@ import {
 } from './types.js';
 import type { Neo4jBackendConfig } from '../config.js';
 import { DEFAULTS, ERROR_MESSAGES, LOG_PREFIXES } from '../constants.js';
+import {
+	sanitizeCypherIdentifier,
+	sanitizeCypherLimit,
+} from '../utils/cypher-sanitizer.js';
 
 /**
  * Neo4j Knowledge Graph Backend
@@ -322,9 +326,10 @@ export class Neo4jBackend implements KnowledgeGraph {
 			let query = 'MATCH (n)';
 			const params: any = {};
 
-			// Add label filters
+			// Add label filters (sanitized to prevent Cypher injection)
 			if (labels && labels.length > 0) {
-				const labelConstraints = labels.map(label => `n:\`${label}\``).join(' OR ');
+				const safeLabels = labels.map(l => sanitizeCypherIdentifier(l, 'label'));
+				const labelConstraints = safeLabels.map(label => `n:${label}`).join(' OR ');
 				query += ` WHERE (${labelConstraints})`;
 			}
 
@@ -341,9 +346,11 @@ export class Neo4jBackend implements KnowledgeGraph {
 
 			query += ' RETURN n, labels(n) as nodeLabels';
 
-			// Add limit
-			if (limit) {
-				query += ` LIMIT ${limit}`;
+			// Add limit (parameterized to prevent injection)
+			if (limit !== undefined) {
+				const safeLimit = sanitizeCypherLimit(limit);
+				query += ' LIMIT $limitParam';
+				params.limitParam = safeLimit;
 			}
 
 			const result = await session.run(query, params);
@@ -535,9 +542,10 @@ export class Neo4jBackend implements KnowledgeGraph {
 			let query = 'MATCH (a)-[r]->(b)';
 			const params: any = {};
 
-			// Add type filter
+			// Add type filter (sanitized to prevent Cypher injection)
 			if (edgeType) {
-				query = `MATCH (a)-[r:\`${edgeType}\`]->(b)`;
+				const safeType = sanitizeCypherIdentifier(edgeType, 'relationship');
+				query = `MATCH (a)-[r:${safeType}]->(b)`;
 			}
 
 			// Add property filters
@@ -550,9 +558,11 @@ export class Neo4jBackend implements KnowledgeGraph {
 
 			query += ' RETURN r, a.id as startId, b.id as endId, type(r) as edgeType';
 
-			// Add limit
-			if (limit) {
-				query += ` LIMIT ${limit}`;
+			// Add limit (parameterized to prevent injection)
+			if (limit !== undefined) {
+				const safeLimit = sanitizeCypherLimit(limit);
+				query += ' LIMIT $limitParam';
+				params.limitParam = safeLimit;
 			}
 
 			const result = await session.run(query, params);
@@ -645,23 +655,29 @@ export class Neo4jBackend implements KnowledgeGraph {
 					break;
 			}
 
-			// Add edge type filters
+			// Add edge type filters (sanitized to prevent Cypher injection)
 			if (edgeTypes && edgeTypes.length > 0) {
-				const typeStr = edgeTypes.map(type => `\`${type}\``).join('|');
+				const safeTypes = edgeTypes.map(type => sanitizeCypherIdentifier(type, 'relationship'));
+				const typeStr = safeTypes.join('|');
 				relationshipPattern = relationshipPattern.replace('[r]', `[r:${typeStr}]`);
 			}
 
 			let query = `
-				MATCH (n)${relationshipPattern}(m) 
-				WHERE n.id = $nodeId 
+				MATCH (n)${relationshipPattern}(m)
+				WHERE n.id = $nodeId
 				RETURN m, labels(m) as nodeLabels, r, type(r) as edgeType, n.id as startId, m.id as endId
 			`;
 
-			if (limit) {
-				query += ` LIMIT ${limit}`;
+			const params: any = { nodeId };
+
+			// Add limit (parameterized to prevent injection)
+			if (limit !== undefined) {
+				const safeLimit = sanitizeCypherLimit(limit);
+				query += ' LIMIT $limitParam';
+				params.limitParam = safeLimit;
 			}
 
-			const result = await session.run(query, { nodeId });
+			const result = await session.run(query, params);
 			const neighbors: Array<{ node: GraphNode; edge: GraphEdge }> = [];
 
 			for (const record of result.records) {
