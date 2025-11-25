@@ -445,10 +445,72 @@ Respond ONLY with the JSON object:`;
 			error: error instanceof Error ? error.message : String(error),
 		});
 
-		// FIX: Enhanced fallback pattern matching with better entity extraction
+		// FIX: Enhanced fallback pattern matching with multi-word entity support
+		// Priority: 1) Quoted entities, 2) Multi-word unquoted, 3) Single-word fallback
 		const FALLBACK_PATTERNS = [
+			// === Priority 1: Quoted entities (explicit boundaries) ===
 			{
-				// "Replace X with Y", "X instead of Y"
+				// 'not "Entity A" but "Entity B"'
+				pattern: /not\s+["']([^"']+)["']\s+but\s+["']([^"']+)["']/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+			{
+				// 'replace "Entity A" with "Entity B"'
+				pattern: /replace\s+["']([^"']+)["']\s+with\s+["']([^"']+)["']/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+			{
+				// '"Entity B" instead of "Entity A"' (reversed)
+				pattern: /["']([^"']+)["']\s+instead\s+of\s+["']([^"']+)["']/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[2].trim(), target: match[1].trim() }
+				})
+			},
+			{
+				// 'merge/combine "X" and/with "Y"'
+				pattern: /(?:merge|combine)\s+["']([^"']+)["']\s+(?:and|with)\s+["']([^"']+)["']/i,
+				type: 'merge_entities' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+
+			// === Priority 2: Multi-word with broader punctuation terminators ===
+			{
+				// "not X but Y" - stop at punctuation OR end
+				pattern: /not\s+(.+?)\s+but\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+			{
+				// "replace X with Y" - stop at punctuation OR end
+				pattern: /replace\s+(.+?)\s+with\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+			{
+				// "merge/combine X and/with Y"
+				pattern: /(?:merge|combine)\s+(.+?)\s+(?:and|with)\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'merge_entities' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1].trim(), target: match[2].trim() }
+				})
+			},
+
+			// === Priority 3: Single-word fallback (backwards compatibility) ===
+			{
+				// "Replace X with Y"
 				pattern: /replace\s+(\S+)\s+with\s+(\S+)/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
