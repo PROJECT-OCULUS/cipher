@@ -454,7 +454,7 @@ Respond ONLY with the JSON object:`;
 				pattern: /not\s+["']([^"']+)["']\s+but\s+["']([^"']+)["']/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 			{
@@ -462,7 +462,7 @@ Respond ONLY with the JSON object:`;
 				pattern: /replace\s+["']([^"']+)["']\s+with\s+["']([^"']+)["']/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 			{
@@ -470,7 +470,7 @@ Respond ONLY with the JSON object:`;
 				pattern: /["']([^"']+)["']\s+instead\s+of\s+["']([^"']+)["']/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[2].trim(), target: match[1].trim() }
+					entities: { source: match[2]?.trim() ?? '', target: match[1]?.trim() ?? '' }
 				})
 			},
 			{
@@ -478,7 +478,15 @@ Respond ONLY with the JSON object:`;
 				pattern: /(?:merge|combine)\s+["']([^"']+)["']\s+(?:and|with)\s+["']([^"']+)["']/i,
 				type: 'merge_entities' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
+				})
+			},
+			{
+				// 'delete relationship between "X" and "Y"'
+				pattern: /delete\s+(?:relationship|connection|link).*between\s+["']([^"']+)["']\s+and\s+["']([^"']+)["']/i,
+				type: 'delete_relationships' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 
@@ -488,7 +496,7 @@ Respond ONLY with the JSON object:`;
 				pattern: /not\s+(.+?)\s+but\s+(.+?)(?:\s*[,.;!?:]|$)/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 			{
@@ -496,7 +504,7 @@ Respond ONLY with the JSON object:`;
 				pattern: /replace\s+(.+?)\s+with\s+(.+?)(?:\s*[,.;!?:]|$)/i,
 				type: 'replace_entity' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 			{
@@ -504,7 +512,39 @@ Respond ONLY with the JSON object:`;
 				pattern: /(?:merge|combine)\s+(.+?)\s+(?:and|with)\s+(.+?)(?:\s*[,.;!?:]|$)/i,
 				type: 'merge_entities' as RelationshipOperation,
 				extract: (match: RegExpMatchArray) => ({
-					entities: { source: match[1].trim(), target: match[2].trim() }
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
+				})
+			},
+			{
+				// 'delete relationship between X and Y.' (multi-word)
+				pattern: /delete\s+(?:relationship|connection|link).*between\s+(.+?)\s+and\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'delete_relationships' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
+				})
+			},
+			{
+				// "X instead of Y." (reversed - target comes first)
+				pattern: /(.+?)\s+instead\s+of\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[2]?.trim() ?? '', target: match[1]?.trim() ?? '' }
+				})
+			},
+			{
+				// "change X to Y"
+				pattern: /change\s+(.+?)\s+to\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
+				})
+			},
+			{
+				// "rename X to Y"
+				pattern: /rename\s+(.+?)\s+to\s+(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			},
 
@@ -548,6 +588,14 @@ Respond ONLY with the JSON object:`;
 				extract: (match: RegExpMatchArray) => ({
 					entities: { source: match[1] },
 					relationships: { property: match[2], value: match[3] }
+				})
+			},
+			{
+				// "X -> Y" or "X => Y" (arrow notation)
+				pattern: /(.+?)\s*(?:->|=>)\s*(.+?)(?:\s*[,.;!?:]|$)/i,
+				type: 'replace_entity' as RelationshipOperation,
+				extract: (match: RegExpMatchArray) => ({
+					entities: { source: match[1]?.trim() ?? '', target: match[2]?.trim() ?? '' }
 				})
 			}
 		];
